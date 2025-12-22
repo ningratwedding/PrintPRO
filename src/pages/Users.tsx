@@ -76,13 +76,20 @@ export function Users() {
 
       const userIds = [...new Set((data || []).map((item: any) => item.user_id))];
 
-      const { data: authUsers } = await supabase.auth.admin.listUsers();
+      let userMetadata: any[] = [];
+      if (userIds.length > 0) {
+        const { data: metadata } = await supabase
+          .from('users_metadata')
+          .select('user_id, email, full_name')
+          .in('user_id', userIds);
+        userMetadata = metadata || [];
+      }
 
       const usersWithRoles: UserWithRole[] = (data || []).map((item: any) => {
-        const authUser = authUsers?.users.find(u => u.id === item.user_id);
+        const metadata = userMetadata?.find(u => u.user_id === item.user_id);
         return {
           user_id: item.user_id,
-          email: authUser?.email || 'Unknown',
+          email: metadata?.email || 'Unknown',
           role_name: item.role?.name || 'No Role',
           role_id: item.role_id,
           branch_name: item.branch?.name || '',
@@ -112,6 +119,17 @@ export function Users() {
       if (signUpError) throw signUpError;
 
       if (authData.user) {
+        const { error: metadataError } = await supabase
+          .from('users_metadata')
+          .insert({
+            user_id: authData.user.id,
+            email: inviteEmail
+          });
+
+        if (metadataError) {
+          console.error('Error creating user metadata:', metadataError);
+        }
+
         const { error: roleError } = await supabase
           .from('user_branch_roles')
           .insert({

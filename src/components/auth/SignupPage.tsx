@@ -35,12 +35,8 @@ export function SignupPage({ onSwitchToLogin }: SignupPageProps) {
     try {
       await signUp(email, password);
       setSuccess(true);
-      setTimeout(() => {
-        onSwitchToLogin();
-      }, 2000);
     } catch (err: any) {
       setError(err.message || 'Failed to sign up');
-    } finally {
       setLoading(false);
     }
   };
@@ -66,7 +62,7 @@ export function SignupPage({ onSwitchToLogin }: SignupPageProps) {
 
             {success && (
               <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg text-sm">
-                Account created successfully! Please check your email to confirm your account. Redirecting to login...
+                Account created successfully! Setting up your account...
               </div>
             )}
 

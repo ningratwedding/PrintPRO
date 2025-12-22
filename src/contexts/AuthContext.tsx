@@ -103,8 +103,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signUp = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signUp({ email, password });
+    const { data, error } = await supabase.auth.signUp({ email, password });
     if (error) throw error;
+
+    if (data.user) {
+      const { error: metadataError } = await supabase
+        .from('users_metadata')
+        .insert({
+          user_id: data.user.id,
+          email: email
+        });
+
+      if (metadataError) {
+        console.error('Error creating user metadata:', metadataError);
+      }
+    }
   };
 
   const signOut = async () => {
