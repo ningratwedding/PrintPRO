@@ -3,6 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { Order } from '../types/database';
 import { Plus, Search, FileText, CheckCircle, Clock, Package, XCircle } from 'lucide-react';
+import { OrderDetailsModal } from '../components/orders/OrderDetailsModal';
 
 export function Orders() {
   const { currentBranch, user } = useAuth();
@@ -11,6 +12,8 @@ export function Orders() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     order_type: 'quotation',
     customer_name: '',
@@ -188,7 +191,14 @@ export function Orders() {
               {filteredOrders.map((order) => {
                 const StatusIcon = getStatusIcon(order.status);
                 return (
-                  <tr key={order.id} className="hover:bg-slate-50 transition-colors cursor-pointer">
+                  <tr
+                    key={order.id}
+                    onClick={() => {
+                      setSelectedOrderId(order.id);
+                      setShowDetailsModal(true);
+                    }}
+                    className="hover:bg-slate-50 transition-colors cursor-pointer"
+                  >
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className="font-mono text-sm font-medium text-slate-900">{order.order_number}</span>
                     </td>
@@ -317,6 +327,19 @@ export function Orders() {
             </form>
           </div>
         </div>
+      )}
+
+      {showDetailsModal && selectedOrderId && (
+        <OrderDetailsModal
+          orderId={selectedOrderId}
+          onClose={() => {
+            setShowDetailsModal(false);
+            setSelectedOrderId(null);
+          }}
+          onSuccess={() => {
+            loadOrders();
+          }}
+        />
       )}
     </div>
   );

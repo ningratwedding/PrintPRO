@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { Material, InventoryLot } from '../types/database';
-import { Plus, Search, Package, AlertTriangle, TrendingDown } from 'lucide-react';
+import { Plus, Search, Package, AlertTriangle, TrendingDown, Edit2, Trash2, PackagePlus } from 'lucide-react';
+import { AddStockModal } from '../components/materials/AddStockModal';
 
 interface MaterialWithStock extends Material {
   total_available: number;
@@ -15,6 +16,10 @@ export function Materials() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [showAddStockModal, setShowAddStockModal] = useState(false);
+  const [editingMaterial, setEditingMaterial] = useState<MaterialWithStock | null>(null);
+  const [selectedMaterial, setSelectedMaterial] = useState<Material | null>(null);
   const [formData, setFormData] = useState({
     name: '',
     code: '',
@@ -108,6 +113,61 @@ export function Materials() {
     }
   };
 
+  const handleEdit = (material: MaterialWithStock) => {
+    setEditingMaterial(material);
+    setFormData({
+      name: material.name,
+      code: material.code,
+      category: material.category,
+      unit: material.unit,
+      min_stock: material.min_stock,
+      reorder_point: material.reorder_point
+    });
+    setShowEditModal(true);
+  };
+
+  const handleUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingMaterial) return;
+
+    try {
+      const { error } = await supabase
+        .from('materials')
+        .update(formData)
+        .eq('id', editingMaterial.id);
+
+      if (error) throw error;
+
+      setShowEditModal(false);
+      setEditingMaterial(null);
+      setFormData({ name: '', code: '', category: 'substrate', unit: 'meter', min_stock: 0, reorder_point: 0 });
+      loadMaterials();
+    } catch (error) {
+      console.error('Error updating material:', error);
+    }
+  };
+
+  const handleDelete = async (materialId: string) => {
+    if (!confirm('Are you sure you want to delete this material?')) return;
+
+    try {
+      const { error } = await supabase
+        .from('materials')
+        .update({ active: false })
+        .eq('id', materialId);
+
+      if (error) throw error;
+      loadMaterials();
+    } catch (error) {
+      console.error('Error deleting material:', error);
+    }
+  };
+
+  const handleAddStock = (material: Material) => {
+    setSelectedMaterial(material);
+    setShowAddStockModal(true);
+  };
+
   const filteredMaterials = materials.filter(m =>
     m.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     m.code.toLowerCase().includes(searchTerm.toLowerCase())
@@ -182,6 +242,7 @@ export function Materials() {
                 <th className="px-6 py-3 text-right text-xs font-medium text-slate-600 uppercase tracking-wider">Min Stock</th>
                 <th className="px-6 py-3 text-right text-xs font-medium text-slate-600 uppercase tracking-wider">Avg Cost</th>
                 <th className="px-6 py-3 text-center text-xs font-medium text-slate-600 uppercase tracking-wider">Status</th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-slate-600 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
@@ -230,6 +291,31 @@ export function Materials() {
                         OK
                       </span>
                     )}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-right">
+                    <div className="flex items-center justify-end gap-2">
+                      <button
+                        onClick={() => handleAddStock(material)}
+                        className="p-2 text-slate-600 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
+                        title="Add Stock"
+                      >
+                        <PackagePlus className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handleEdit(material)}
+                        className="p-2 text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                        title="Edit"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(material.id)}
+                        className="p-2 text-slate-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                        title="Delete"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -336,6 +422,117 @@ export function Materials() {
             </form>
           </div>
         </div>
+      )}
+
+      {showEditModal && editingMaterial && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full">
+            <div className="p-6 border-b border-slate-200">
+              <h2 className="text-xl font-bold text-slate-900">Edit Material</h2>
+            </div>
+            <form onSubmit={handleUpdate} className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Material Name</label>
+                <input
+                  type="text"
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Material Code</label>
+                <input
+                  type="text"
+                  value={formData.code}
+                  disabled
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg bg-slate-100 text-slate-500"
+                />
+                <p className="text-xs text-slate-500 mt-1">Code cannot be changed</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Category</label>
+                <select
+                  value={formData.category}
+                  onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  {categories.map(cat => (
+                    <option key={cat.value} value={cat.value}>{cat.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Unit</label>
+                <input
+                  type="text"
+                  value={formData.unit}
+                  onChange={(e) => setFormData({ ...formData, unit: e.target.value })}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  required
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">Min Stock</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={formData.min_stock}
+                    onChange={(e) => setFormData({ ...formData, min_stock: Number(e.target.value) })}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">Reorder Point</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={formData.reorder_point}
+                    onChange={(e) => setFormData({ ...formData, reorder_point: Number(e.target.value) })}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    required
+                  />
+                </div>
+              </div>
+              <div className="flex gap-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowEditModal(false);
+                    setEditingMaterial(null);
+                    setFormData({ name: '', code: '', category: 'substrate', unit: 'meter', min_stock: 0, reorder_point: 0 });
+                  }}
+                  className="flex-1 px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all"
+                >
+                  Update Material
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {showAddStockModal && selectedMaterial && currentBranch && (
+        <AddStockModal
+          material={selectedMaterial}
+          branchId={currentBranch.id}
+          onClose={() => {
+            setShowAddStockModal(false);
+            setSelectedMaterial(null);
+          }}
+          onSuccess={() => {
+            loadMaterials();
+          }}
+        />
       )}
     </div>
   );

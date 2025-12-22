@@ -93,6 +93,65 @@ export function POS() {
     }
   };
 
+  const handlePayment = async (paymentMethod: string) => {
+    if (!currentBranch || !user || !activeSession || cart.length === 0) return;
+
+    try {
+      const { data: branch } = await supabase
+        .from('branches')
+        .select('company_id')
+        .eq('id', currentBranch.id)
+        .single();
+
+      if (!branch) return;
+
+      const totalAmount = cart.reduce((sum, item) => sum + item.price, 0);
+      const orderNumber = `POS-${Date.now().toString().slice(-8)}`;
+
+      const { data: order, error: orderError } = await supabase
+        .from('orders')
+        .insert({
+          company_id: branch.company_id,
+          branch_id: currentBranch.id,
+          order_number: orderNumber,
+          order_type: 'sales_order',
+          status: 'paid',
+          customer_name: 'Walk-in Customer',
+          order_date: new Date().toISOString().split('T')[0],
+          subtotal: totalAmount,
+          total_amount: totalAmount,
+          user_id: user.id
+        })
+        .select()
+        .single();
+
+      if (orderError) throw orderError;
+
+      const paymentNumber = `PAY-${Date.now().toString().slice(-8)}`;
+
+      const { error: paymentError } = await supabase
+        .from('payments')
+        .insert({
+          company_id: branch.company_id,
+          branch_id: currentBranch.id,
+          payment_number: paymentNumber,
+          order_id: order.id,
+          pos_session_id: activeSession.id,
+          payment_method: paymentMethod,
+          amount: totalAmount,
+          user_id: user.id
+        });
+
+      if (paymentError) throw paymentError;
+
+      alert(`Payment successful! Order #${orderNumber}`);
+      setCart([]);
+    } catch (error) {
+      console.error('Error processing payment:', error);
+      alert('Payment failed. Please try again.');
+    }
+  };
+
   const paymentMethods = [
     { id: 'cash', label: 'Cash', icon: Banknote, color: 'from-emerald-600 to-emerald-700' },
     { id: 'card', label: 'Card', icon: CreditCard, color: 'from-blue-600 to-blue-700' },
@@ -250,6 +309,7 @@ export function POS() {
                 {paymentMethods.map((method) => (
                   <button
                     key={method.id}
+                    onClick={() => handlePayment(method.id)}
                     disabled={cart.length === 0}
                     className={`w-full flex items-center gap-3 px-4 py-3 bg-gradient-to-r ${method.color} text-white rounded-lg hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed`}
                   >

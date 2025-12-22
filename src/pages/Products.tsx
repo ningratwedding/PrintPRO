@@ -10,6 +10,8 @@ export function Products() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<ProductTemplate | null>(null);
   const [formData, setFormData] = useState({
     name: '',
     code: '',
@@ -79,6 +81,55 @@ export function Products() {
       loadProducts();
     } catch (error) {
       console.error('Error creating product:', error);
+    }
+  };
+
+  const handleEdit = (product: ProductTemplate) => {
+    setEditingProduct(product);
+    setFormData({
+      name: product.name,
+      code: product.code,
+      category: product.category,
+      description: product.description || '',
+      base_unit: product.base_unit
+    });
+    setShowEditModal(true);
+  };
+
+  const handleUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingProduct) return;
+
+    try {
+      const { error } = await supabase
+        .from('product_templates')
+        .update(formData)
+        .eq('id', editingProduct.id);
+
+      if (error) throw error;
+
+      setShowEditModal(false);
+      setEditingProduct(null);
+      setFormData({ name: '', code: '', category: 'banner', description: '', base_unit: 'pcs' });
+      loadProducts();
+    } catch (error) {
+      console.error('Error updating product:', error);
+    }
+  };
+
+  const handleDelete = async (productId: string) => {
+    if (!confirm('Are you sure you want to delete this product?')) return;
+
+    try {
+      const { error } = await supabase
+        .from('product_templates')
+        .update({ active: false })
+        .eq('id', productId);
+
+      if (error) throw error;
+      loadProducts();
+    } catch (error) {
+      console.error('Error deleting product:', error);
     }
   };
 
@@ -174,10 +225,16 @@ export function Products() {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right">
                     <div className="flex items-center justify-end gap-2">
-                      <button className="p-2 text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">
+                      <button
+                        onClick={() => handleEdit(product)}
+                        className="p-2 text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                      >
                         <Edit2 className="w-4 h-4" />
                       </button>
-                      <button className="p-2 text-slate-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors">
+                      <button
+                        onClick={() => handleDelete(product.id)}
+                        className="p-2 text-slate-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                      >
                         <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
@@ -267,6 +324,90 @@ export function Products() {
                   className="flex-1 px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all"
                 >
                   Add Product
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {showEditModal && editingProduct && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b border-slate-200">
+              <h2 className="text-xl font-bold text-slate-900">Edit Product</h2>
+            </div>
+            <form onSubmit={handleUpdate} className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Product Name</label>
+                <input
+                  type="text"
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Product Code</label>
+                <input
+                  type="text"
+                  value={formData.code}
+                  onChange={(e) => setFormData({ ...formData, code: e.target.value })}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  required
+                  disabled
+                />
+                <p className="text-xs text-slate-500 mt-1">Code cannot be changed</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Category</label>
+                <select
+                  value={formData.category}
+                  onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  {categories.map(cat => (
+                    <option key={cat.value} value={cat.value}>{cat.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Base Unit</label>
+                <input
+                  type="text"
+                  value={formData.base_unit}
+                  onChange={(e) => setFormData({ ...formData, base_unit: e.target.value })}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Description</label>
+                <textarea
+                  value={formData.description}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  rows={3}
+                />
+              </div>
+              <div className="flex gap-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowEditModal(false);
+                    setEditingProduct(null);
+                    setFormData({ name: '', code: '', category: 'banner', description: '', base_unit: 'pcs' });
+                  }}
+                  className="flex-1 px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all"
+                >
+                  Update Product
                 </button>
               </div>
             </form>
