@@ -9,6 +9,7 @@ import { Orders } from './pages/Orders';
 import { Production } from './pages/Production';
 import { POS } from './pages/POS';
 import { Reports } from './pages/Reports';
+import { Users } from './pages/Users';
 
 function AppContent() {
   const { user, loading } = useAuth();
@@ -54,6 +55,8 @@ function AppContent() {
         return <POS />;
       case '/reports':
         return <Reports />;
+      case '/users':
+        return <Users />;
       case '/pricing':
       case '/deliveries':
       case '/settings':

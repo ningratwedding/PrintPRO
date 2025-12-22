@@ -14,7 +14,8 @@ import {
   Menu,
   X,
   Building2,
-  ChevronDown
+  ChevronDown,
+  Users
 } from 'lucide-react';
 
 interface LayoutProps {
@@ -26,6 +27,7 @@ interface NavItem {
   icon: typeof LayoutDashboard;
   path: string;
   badge?: number;
+  roles?: string[];
 }
 
 const navItems: NavItem[] = [
@@ -38,6 +40,7 @@ const navItems: NavItem[] = [
   { label: 'POS', icon: DollarSign, path: '/pos' },
   { label: 'Deliveries', icon: Truck, path: '/deliveries' },
   { label: 'Reports', icon: BarChart3, path: '/reports' },
+  { label: 'Users', icon: Users, path: '/users', roles: ['owner', 'admin'] },
   { label: 'Settings', icon: Settings, path: '/settings' }
 ];
 
@@ -109,21 +112,27 @@ export function Layout({ children }: LayoutProps) {
           )}
 
           <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
-            {navItems.map((item) => (
-              <a
-                key={item.path}
-                href={item.path}
-                className="flex items-center gap-3 px-4 py-3 text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg transition-all group"
-              >
-                <item.icon className="w-5 h-5 group-hover:scale-110 transition-transform" />
-                <span className="font-medium">{item.label}</span>
-                {item.badge && (
-                  <span className="ml-auto bg-red-500 text-white text-xs px-2 py-1 rounded-full">
-                    {item.badge}
-                  </span>
-                )}
-              </a>
-            ))}
+            {navItems
+              .filter(item => {
+                if (!item.roles) return true;
+                const userRoleName = currentRole?.name?.toLowerCase() || '';
+                return item.roles.includes(userRoleName);
+              })
+              .map((item) => (
+                <a
+                  key={item.path}
+                  href={item.path}
+                  className="flex items-center gap-3 px-4 py-3 text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg transition-all group"
+                >
+                  <item.icon className="w-5 h-5 group-hover:scale-110 transition-transform" />
+                  <span className="font-medium">{item.label}</span>
+                  {item.badge && (
+                    <span className="ml-auto bg-red-500 text-white text-xs px-2 py-1 rounded-full">
+                      {item.badge}
+                    </span>
+                  )}
+                </a>
+              ))}
           </nav>
 
           <div className="p-4 border-t border-slate-700">
