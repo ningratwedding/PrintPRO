@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { LoginPage } from './components/auth/LoginPage';
 import { SignupPage } from './components/auth/SignupPage';
+import { SetupWizard } from './components/setup/SetupWizard';
 import { Layout } from './components/layout/Layout';
 import { Dashboard } from './pages/Dashboard';
 import { Products } from './pages/Products';
@@ -13,9 +14,10 @@ import { Reports } from './pages/Reports';
 import { Users } from './pages/Users';
 
 function AppContent() {
-  const { user, loading } = useAuth();
+  const { user, loading, userBranches } = useAuth();
   const [currentPath, setCurrentPath] = useState(window.location.hash.slice(1) || '/dashboard');
   const [showSignup, setShowSignup] = useState(false);
+  const [setupComplete, setSetupComplete] = useState(false);
 
   useEffect(() => {
     const handleHashChange = () => {
@@ -41,6 +43,13 @@ function AppContent() {
     return showSignup
       ? <SignupPage onSwitchToLogin={() => setShowSignup(false)} />
       : <LoginPage onSwitchToSignup={() => setShowSignup(true)} />;
+  }
+
+  if (userBranches.length === 0 && !setupComplete) {
+    return <SetupWizard onComplete={() => {
+      setSetupComplete(true);
+      window.location.reload();
+    }} />;
   }
 
   const renderPage = () => {

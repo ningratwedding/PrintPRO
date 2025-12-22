@@ -1,67 +1,96 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
-import { Plus, Search, Edit2, Trash2, Users as UsersIcon, Mail, Shield, UserCheck, UserX } from 'lucide-react';
+import { Plus, Search, Shield, UserPlus, Trash2, Mail } from 'lucide-react';
 
-interface User {
-  id: string;
+interface UserWithRole {
+  user_id: string;
   email: string;
-  role: string;
-  full_name: string | null;
-  active: boolean;
+  role_name: string;
+  role_id: string;
+  branch_name: string;
   created_at: string;
 }
 
+interface Role {
+  id: string;
+  name: string;
+  description: string;
+}
+
 export function Users() {
-  const { user, currentBranch, currentRole } = useAuth();
-  const [users, setUsers] = useState<User[]>([]);
+  const { currentBranch, currentRole, user } = useAuth();
+  const [users, setUsers] = useState<UserWithRole[]>([]);
+  const [roles, setRoles] = useState<Role[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterRole, setFilterRole] = useState<string>('all');
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [editingUser, setEditingUser] = useState<User | null>(null);
-  const [formData, setFormData] = useState({
-    email: '',
-    password: '',
-    full_name: '',
-    role: 'staff'
-  });
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [showAssignRoleModal, setShowAssignRoleModal] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [invitePassword, setInvitePassword] = useState('');
+  const [selectedRoleId, setSelectedRoleId] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
-  const isAuthorized = currentRole?.name?.toLowerCase() === 'owner' ||
-                       currentRole?.name?.toLowerCase() === 'admin';
+  const isAuthorized = currentRole?.name?.toLowerCase() === 'owner' || currentRole?.name?.toLowerCase() === 'admin';
 
   useEffect(() => {
     if (currentBranch) {
       loadUsers();
+      loadRoles();
     }
-  }, [currentBranch, filterRole]);
+  }, [currentBranch]);
+
+  const loadRoles = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('roles')
+        .select('*')
+        .order('name');
+
+      if (error) throw error;
+      setRoles(data || []);
+      if (data && data.length > 0) {
+        setSelectedRoleId(data.find(r => r.name === 'Kasir')?.id || data[0].id);
+      }
+    } catch (error) {
+      console.error('Error loading roles:', error);
+    }
+  };
 
   const loadUsers = async () => {
     if (!currentBranch) return;
 
     try {
-      const { data: branch } = await supabase
-        .from('branches')
-        .select('company_id')
-        .eq('id', currentBranch.id)
-        .single();
+      const { data, error } = await supabase
+        .from('user_branch_roles')
+        .select(`
+          user_id,
+          role_id,
+          created_at,
+          branch:branches(name),
+          role:roles(name)
+        `)
+        .eq('branch_id', currentBranch.id);
 
-      if (!branch) return;
-
-      let query = supabase
-        .from('users')
-        .select('*')
-        .eq('company_id', branch.company_id)
-        .order('created_at', { ascending: false });
-
-      if (filterRole !== 'all') {
-        query = query.eq('role', filterRole);
-      }
-
-      const { data, error } = await query;
       if (error) throw error;
-      setUsers(data || []);
+
+      const userIds = [...new Set((data || []).map((item: any) => item.user_id))];
+
+      const { data: authUsers } = await supabase.auth.admin.listUsers();
+
+      const usersWithRoles: UserWithRole[] = (data || []).map((item: any) => {
+        const authUser = authUsers?.users.find(u => u.id === item.user_id);
+        return {
+          user_id: item.user_id,
+          email: authUser?.email || 'Unknown',
+          role_name: item.role?.name || 'No Role',
+          role_id: item.role_id,
+          branch_name: item.branch?.name || '',
+          created_at: item.created_at
+        };
+      });
+
+      setUsers(usersWithRoles);
     } catch (error) {
       console.error('Error loading users:', error);
     } finally {
@@ -69,126 +98,88 @@ export function Users() {
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleInviteUser = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!currentBranch) return;
+    if (!currentBranch || !selectedRoleId) return;
 
+    setSubmitting(true);
     try {
-      const { data: branch } = await supabase
-        .from('branches')
-        .select('company_id')
-        .eq('id', currentBranch.id)
-        .single();
-
-      if (!branch) return;
-
       const { data: authData, error: signUpError } = await supabase.auth.signUp({
-        email: formData.email,
-        password: formData.password,
-        options: {
-          data: {
-            full_name: formData.full_name,
-            role: formData.role,
-            company_id: branch.company_id
-          }
-        }
+        email: inviteEmail,
+        password: invitePassword,
       });
 
       if (signUpError) throw signUpError;
 
       if (authData.user) {
-        const { error: userError } = await supabase
-          .from('users')
+        const { error: roleError } = await supabase
+          .from('user_branch_roles')
           .insert({
-            id: authData.user.id,
-            email: formData.email,
-            full_name: formData.full_name,
-            role: formData.role,
-            company_id: branch.company_id
+            user_id: authData.user.id,
+            branch_id: currentBranch.id,
+            role_id: selectedRoleId
           });
 
-        if (userError) throw userError;
+        if (roleError) throw roleError;
       }
 
-      alert(`User ${formData.email} has been created successfully!`);
-      setShowAddModal(false);
-      setFormData({ email: '', password: '', full_name: '', role: 'staff' });
+      alert(`User ${inviteEmail} has been invited successfully!`);
+      setShowInviteModal(false);
+      setInviteEmail('');
+      setInvitePassword('');
       loadUsers();
     } catch (error: any) {
-      console.error('Error creating user:', error);
-      alert(error.message || 'Failed to create user');
+      console.error('Error inviting user:', error);
+      alert(error.message || 'Failed to invite user');
+    } finally {
+      setSubmitting(false);
     }
   };
 
-  const handleEdit = (user: User) => {
-    setEditingUser(user);
-    setFormData({
-      email: user.email,
-      password: '',
-      full_name: user.full_name || '',
-      role: user.role
-    });
-    setShowEditModal(true);
-  };
-
-  const handleUpdate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editingUser) return;
-
-    try {
-      const { error } = await supabase
-        .from('users')
-        .update({
-          full_name: formData.full_name,
-          role: formData.role
-        })
-        .eq('id', editingUser.id);
-
-      if (error) throw error;
-
-      alert('User updated successfully!');
-      setShowEditModal(false);
-      setEditingUser(null);
-      setFormData({ email: '', password: '', full_name: '', role: 'staff' });
-      loadUsers();
-    } catch (error) {
-      console.error('Error updating user:', error);
-      alert('Failed to update user');
+  const handleRemoveUser = async (userId: string, roleId: string) => {
+    if (!currentBranch) return;
+    if (userId === user?.id) {
+      alert('You cannot remove yourself');
+      return;
     }
-  };
 
-  const handleToggleActive = async (userId: string, currentStatus: boolean) => {
+    if (!confirm('Are you sure you want to remove this user from the branch?')) return;
+
     try {
       const { error } = await supabase
-        .from('users')
-        .update({ active: !currentStatus })
-        .eq('id', userId);
+        .from('user_branch_roles')
+        .delete()
+        .eq('user_id', userId)
+        .eq('branch_id', currentBranch.id)
+        .eq('role_id', roleId);
 
       if (error) throw error;
       loadUsers();
     } catch (error) {
-      console.error('Error toggling user status:', error);
+      console.error('Error removing user:', error);
+      alert('Failed to remove user');
     }
   };
 
-  const getRoleBadgeColor = (role: string) => {
-    switch (role) {
+  const getRoleBadgeColor = (roleName: string) => {
+    switch (roleName.toLowerCase()) {
       case 'owner':
         return 'bg-red-100 text-red-700';
       case 'admin':
         return 'bg-blue-100 text-blue-700';
-      case 'manager':
+      case 'estimator':
         return 'bg-violet-100 text-violet-700';
-      case 'staff':
-        return 'bg-slate-100 text-slate-700';
+      case 'kasir':
+        return 'bg-green-100 text-green-700';
+      case 'produksi':
+        return 'bg-orange-100 text-orange-700';
       default:
         return 'bg-slate-100 text-slate-700';
     }
   };
 
   const filteredUsers = users.filter(u =>
-    u.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (u.full_name?.toLowerCase() || '').includes(searchTerm.toLowerCase())
+    u.email.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   if (loading) {
@@ -219,43 +210,28 @@ export function Users() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-slate-900">User Management</h1>
-          <p className="text-slate-600 mt-1">Manage staff and user access</p>
+          <p className="text-slate-600 mt-1">Manage user access and roles for {currentBranch?.name}</p>
         </div>
         <button
-          onClick={() => setShowAddModal(true)}
+          onClick={() => setShowInviteModal(true)}
           className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 shadow-lg hover:shadow-xl transition-all"
         >
-          <Plus className="w-5 h-5" />
-          Add User
+          <UserPlus className="w-5 h-5" />
+          Invite User
         </button>
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-slate-200">
-        <div className="p-6 border-b border-slate-200 space-y-4">
+        <div className="p-6 border-b border-slate-200">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-400" />
             <input
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search users..."
+              placeholder="Search by email..."
               className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
-          </div>
-          <div className="flex gap-2 flex-wrap">
-            {['all', 'owner', 'admin', 'manager', 'staff'].map(role => (
-              <button
-                key={role}
-                onClick={() => setFilterRole(role)}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  filterRole === role
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                }`}
-              >
-                {role.charAt(0).toUpperCase() + role.slice(1)}
-              </button>
-            ))}
           </div>
         </div>
 
@@ -263,74 +239,43 @@ export function Users() {
           <table className="w-full">
             <thead className="bg-slate-50 border-b border-slate-200">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-slate-600 uppercase tracking-wider">User</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-slate-600 uppercase tracking-wider">Email</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-slate-600 uppercase tracking-wider">Role</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-slate-600 uppercase tracking-wider">Status</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-slate-600 uppercase tracking-wider">Created</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-slate-600 uppercase tracking-wider">Added</th>
                 <th className="px-6 py-3 text-right text-xs font-medium text-slate-600 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
               {filteredUsers.map((userData) => (
-                <tr key={userData.id} className="hover:bg-slate-50 transition-colors">
+                <tr key={`${userData.user_id}-${userData.role_id}`} className="hover:bg-slate-50 transition-colors">
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">
-                      <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                        userData.active ? 'bg-blue-100' : 'bg-slate-100'
-                      }`}>
-                        <Mail className={`w-5 h-5 ${userData.active ? 'text-blue-600' : 'text-slate-400'}`} />
+                      <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
+                        <Mail className="w-5 h-5 text-blue-600" />
                       </div>
                       <div>
-                        <p className="font-medium text-slate-900">{userData.full_name || 'No Name'}</p>
-                        <p className="text-sm text-slate-500">{userData.email}</p>
+                        <p className="font-medium text-slate-900">{userData.email}</p>
                       </div>
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`inline-flex items-center gap-1 px-3 py-1 text-xs font-medium rounded-full ${getRoleBadgeColor(userData.role)}`}>
+                    <span className={`inline-flex items-center gap-1 px-3 py-1 text-xs font-medium rounded-full ${getRoleBadgeColor(userData.role_name)}`}>
                       <Shield className="w-3 h-3" />
-                      {userData.role}
+                      {userData.role_name}
                     </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    {userData.active ? (
-                      <span className="inline-flex items-center gap-1 px-3 py-1 text-xs font-medium bg-emerald-100 text-emerald-700 rounded-full">
-                        <UserCheck className="w-3 h-3" />
-                        Active
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 px-3 py-1 text-xs font-medium bg-red-100 text-red-700 rounded-full">
-                        <UserX className="w-3 h-3" />
-                        Inactive
-                      </span>
-                    )}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">
                     {new Date(userData.created_at).toLocaleDateString('id-ID')}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right">
-                    <div className="flex items-center justify-end gap-2">
-                      <button
-                        onClick={() => handleEdit(userData)}
-                        className="p-2 text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                        disabled={userData.id === user?.id}
-                        title="Edit"
-                      >
-                        <Edit2 className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => handleToggleActive(userData.id, userData.active)}
-                        className={`p-2 rounded-lg transition-colors ${
-                          userData.active
-                            ? 'text-slate-600 hover:text-red-600 hover:bg-red-50'
-                            : 'text-slate-600 hover:text-emerald-600 hover:bg-emerald-50'
-                        }`}
-                        disabled={userData.id === user?.id || userData.role === 'owner'}
-                        title={userData.active ? 'Deactivate' : 'Activate'}
-                      >
-                        {userData.active ? <UserX className="w-4 h-4" /> : <UserCheck className="w-4 h-4" />}
-                      </button>
-                    </div>
+                    <button
+                      onClick={() => handleRemoveUser(userData.user_id, userData.role_id)}
+                      className="p-2 text-slate-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                      disabled={userData.user_id === user?.id || userData.role_name.toLowerCase() === 'owner'}
+                      title="Remove from branch"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -340,36 +285,26 @@ export function Users() {
 
         {filteredUsers.length === 0 && (
           <div className="text-center py-12">
-            <UsersIcon className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+            <Shield className="w-12 h-12 text-slate-300 mx-auto mb-3" />
             <p className="text-slate-600">No users found</p>
           </div>
         )}
       </div>
 
-      {showAddModal && (
+      {showInviteModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-2xl max-w-md w-full">
             <div className="p-6 border-b border-slate-200">
-              <h2 className="text-xl font-bold text-slate-900">Add New User</h2>
-              <p className="text-sm text-slate-600 mt-1">Create a new staff account</p>
+              <h2 className="text-xl font-bold text-slate-900">Invite New User</h2>
+              <p className="text-sm text-slate-600 mt-1">Add a new user to this branch</p>
             </div>
-            <form onSubmit={handleSubmit} className="p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Full Name</label>
-                <input
-                  type="text"
-                  value={formData.full_name}
-                  onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  required
-                />
-              </div>
+            <form onSubmit={handleInviteUser} className="p-6 space-y-4">
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-2">Email</label>
                 <input
                   type="email"
-                  value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  value={inviteEmail}
+                  onChange={(e) => setInviteEmail(e.target.value)}
                   className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   required
                 />
@@ -378,8 +313,8 @@ export function Users() {
                 <label className="block text-sm font-medium text-slate-700 mb-2">Password</label>
                 <input
                   type="password"
-                  value={formData.password}
-                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                  value={invitePassword}
+                  onChange={(e) => setInvitePassword(e.target.value)}
                   className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   required
                   minLength={6}
@@ -389,91 +324,25 @@ export function Users() {
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-2">Role</label>
                 <select
-                  value={formData.role}
-                  onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="staff">Staff</option>
-                  <option value="manager">Manager</option>
-                  <option value="admin">Admin</option>
-                </select>
-                <p className="text-xs text-slate-500 mt-1">Staff can view and create. Manager can edit. Admin has full access.</p>
-              </div>
-              <div className="flex gap-3 pt-4">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowAddModal(false);
-                    setFormData({ email: '', password: '', full_name: '', role: 'staff' });
-                  }}
-                  className="flex-1 px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="flex-1 px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all"
-                >
-                  Add User
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {showEditModal && editingUser && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full">
-            <div className="p-6 border-b border-slate-200">
-              <h2 className="text-xl font-bold text-slate-900">Edit User</h2>
-              <p className="text-sm text-slate-600 mt-1">{editingUser.email}</p>
-            </div>
-            <form onSubmit={handleUpdate} className="p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Full Name</label>
-                <input
-                  type="text"
-                  value={formData.full_name}
-                  onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
+                  value={selectedRoleId}
+                  onChange={(e) => setSelectedRoleId(e.target.value)}
                   className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Email</label>
-                <input
-                  type="email"
-                  value={formData.email}
-                  disabled
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg bg-slate-100 text-slate-500"
-                />
-                <p className="text-xs text-slate-500 mt-1">Email cannot be changed</p>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Role</label>
-                <select
-                  value={formData.role}
-                  onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  disabled={editingUser.role === 'owner'}
                 >
-                  <option value="staff">Staff</option>
-                  <option value="manager">Manager</option>
-                  <option value="admin">Admin</option>
-                  {editingUser.role === 'owner' && <option value="owner">Owner</option>}
+                  {roles.map(role => (
+                    <option key={role.id} value={role.id}>
+                      {role.name} - {role.description}
+                    </option>
+                  ))}
                 </select>
-                {editingUser.role === 'owner' && (
-                  <p className="text-xs text-red-500 mt-1">Owner role cannot be changed</p>
-                )}
               </div>
               <div className="flex gap-3 pt-4">
                 <button
                   type="button"
                   onClick={() => {
-                    setShowEditModal(false);
-                    setEditingUser(null);
-                    setFormData({ email: '', password: '', full_name: '', role: 'staff' });
+                    setShowInviteModal(false);
+                    setInviteEmail('');
+                    setInvitePassword('');
                   }}
                   className="flex-1 px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors"
                 >
@@ -481,9 +350,10 @@ export function Users() {
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all"
+                  disabled={submitting}
+                  className="flex-1 px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all disabled:opacity-50"
                 >
-                  Update User
+                  {submitting ? 'Inviting...' : 'Invite User'}
                 </button>
               </div>
             </form>
