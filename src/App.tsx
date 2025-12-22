@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { LoginPage } from './components/auth/LoginPage';
+import { SignupPage } from './components/auth/SignupPage';
 import { Layout } from './components/layout/Layout';
 import { Dashboard } from './pages/Dashboard';
 import { Products } from './pages/Products';
@@ -14,6 +15,7 @@ import { Users } from './pages/Users';
 function AppContent() {
   const { user, loading } = useAuth();
   const [currentPath, setCurrentPath] = useState(window.location.hash.slice(1) || '/dashboard');
+  const [showSignup, setShowSignup] = useState(false);
 
   useEffect(() => {
     const handleHashChange = () => {
@@ -36,7 +38,9 @@ function AppContent() {
   }
 
   if (!user) {
-    return <LoginPage />;
+    return showSignup
+      ? <SignupPage onSwitchToLogin={() => setShowSignup(false)} />
+      : <LoginPage onSwitchToSignup={() => setShowSignup(true)} />;
   }
 
   const renderPage = () => {
