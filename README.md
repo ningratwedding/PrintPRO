@@ -148,19 +148,37 @@ Total Price = Final Unit Price × quantity
 
 4. The database schema is already migrated via Supabase MCP tools
 
-5. (Optional) Load demo data:
-   Execute the SQL commands in `seed-demo-data.sql` via Supabase SQL Editor
-
-6. Create demo user (optional):
-   - Email: admin@demo.com
-   - Password: demo123
-   - Then link user to branch and role via SQL:
+5. Create your company and user:
+   - Sign up via the application login page
+   - Create your company and branch via Supabase SQL Editor:
    ```sql
+   -- Create your company
+   INSERT INTO companies (name, code, address, phone, email, active)
+   VALUES ('Your Company Name', 'YOUR-CODE', 'Your Address', '021-xxx', 'info@yourcompany.com', true)
+   RETURNING id;
+
+   -- Create your branch (use company_id from above)
+   INSERT INTO branches (company_id, name, code, address, phone, active)
+   VALUES ('[company-id]', 'Main Branch', 'MAIN', 'Your Address', '021-xxx', true)
+   RETURNING id;
+
+   -- Link user to branch with Owner role (use your auth.users.id and branch_id from above)
    INSERT INTO user_branch_roles (user_id, branch_id, role_id)
    VALUES (
-     '[user-id-from-auth-users]',
-     '22222222-2222-2222-2222-222222222222',
-     '[owner-role-id]'
+     '[your-user-id-from-auth-users]',
+     '[branch-id]',
+     (SELECT id FROM roles WHERE name = 'Owner')
+   );
+
+   -- Add user to users table
+   INSERT INTO users (id, email, full_name, role, company_id, active)
+   VALUES (
+     '[your-user-id-from-auth-users]',
+     'your@email.com',
+     'Your Name',
+     'owner',
+     '[company-id]',
+     true
    );
    ```
 
