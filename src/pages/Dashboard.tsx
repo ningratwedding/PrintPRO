@@ -185,52 +185,151 @@ export function Dashboard() {
         ))}
       </div>
 
+      {currentBranch && <RecentOrdersWidget branchId={currentBranch.id} />}
+    </div>
+  );
+}
+
+function RecentOrdersWidget({ branchId }: { branchId: string }) {
+  const [recentOrders, setRecentOrders] = useState<any[]>([]);
+  const [workOrders, setWorkOrders] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadRecentData();
+  }, [branchId]);
+
+  const loadRecentData = async () => {
+    try {
+      const [ordersResult, workOrdersResult] = await Promise.all([
+        supabase
+          .from('orders')
+          .select('*')
+          .eq('branch_id', branchId)
+          .order('created_at', { ascending: false })
+          .limit(3),
+        supabase
+          .from('work_orders')
+          .select('*')
+          .eq('branch_id', branchId)
+          .eq('status', 'in_progress')
+          .order('created_at', { ascending: false })
+          .limit(3)
+      ]);
+
+      setRecentOrders(ordersResult.data || []);
+      setWorkOrders(workOrdersResult.data || []);
+    } catch (error) {
+      console.error('Error loading recent data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const calculateProgress = (wo: any) => {
+    if (wo.quantity_planned === 0) return 0;
+    return Math.round((wo.quantity_completed / wo.quantity_planned) * 100);
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'confirmed': return 'bg-blue-100 text-blue-700';
+      case 'delivered': return 'bg-emerald-100 text-emerald-700';
+      case 'paid': return 'bg-green-100 text-green-700';
+      default: return 'bg-slate-100 text-slate-700';
+    }
+  };
+
+  if (loading) {
+    return (
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-          <h2 className="text-lg font-bold text-slate-900 mb-4">Recent Orders</h2>
-          <div className="space-y-3">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg hover:bg-slate-100 transition-colors">
+          <div className="animate-pulse space-y-3">
+            <div className="h-4 bg-slate-200 rounded w-1/3"></div>
+            <div className="h-16 bg-slate-200 rounded"></div>
+            <div className="h-16 bg-slate-200 rounded"></div>
+          </div>
+        </div>
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+          <div className="animate-pulse space-y-3">
+            <div className="h-4 bg-slate-200 rounded w-1/3"></div>
+            <div className="h-16 bg-slate-200 rounded"></div>
+            <div className="h-16 bg-slate-200 rounded"></div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+        <h2 className="text-lg font-bold text-slate-900 mb-4">Recent Orders</h2>
+        <div className="space-y-3">
+          {recentOrders.length > 0 ? (
+            recentOrders.map((order) => (
+              <div key={order.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer" onClick={() => window.location.hash = '/orders'}>
                 <div>
-                  <p className="font-medium text-slate-900">Order #{1000 + i}</p>
-                  <p className="text-sm text-slate-600">Customer Name {i}</p>
+                  <p className="font-medium text-slate-900">{order.order_number}</p>
+                  <p className="text-sm text-slate-600">{order.customer_name || 'Walk-in Customer'}</p>
                 </div>
                 <div className="text-right">
-                  <p className="font-medium text-slate-900">Rp {(1500000 * i).toLocaleString('id-ID')}</p>
-                  <span className="inline-block px-2 py-1 text-xs font-medium bg-emerald-100 text-emerald-700 rounded-full">
-                    Confirmed
+                  <p className="font-medium text-slate-900">Rp {order.total_amount.toLocaleString('id-ID')}</p>
+                  <span className={`inline-block px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(order.status)}`}>
+                    {order.status}
                   </span>
                 </div>
               </div>
-            ))}
-          </div>
+            ))
+          ) : (
+            <div className="text-center py-8 text-slate-500">
+              <p>No recent orders</p>
+              <button
+                onClick={() => window.location.hash = '/orders'}
+                className="mt-2 text-sm text-blue-600 hover:text-blue-700"
+              >
+                Create your first order
+              </button>
+            </div>
+          )}
         </div>
+      </div>
 
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-          <h2 className="text-lg font-bold text-slate-900 mb-4">Production Status</h2>
-          <div className="space-y-4">
-            {[
-              { name: 'Banner 3x2m', progress: 75, status: 'Printing' },
-              { name: 'Stiker 1000pcs', progress: 45, status: 'Laminating' },
-              { name: 'Brosur A4', progress: 90, status: 'QC' }
-            ].map((item, i) => (
-              <div key={i}>
-                <div className="flex items-center justify-between mb-2">
-                  <div>
-                    <p className="font-medium text-slate-900">{item.name}</p>
-                    <p className="text-sm text-slate-600">{item.status}</p>
+      <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+        <h2 className="text-lg font-bold text-slate-900 mb-4">Production Status</h2>
+        <div className="space-y-4">
+          {workOrders.length > 0 ? (
+            workOrders.map((wo) => {
+              const progress = calculateProgress(wo);
+              return (
+                <div key={wo.id} className="cursor-pointer hover:bg-slate-50 p-2 rounded-lg transition-colors" onClick={() => window.location.hash = '/production'}>
+                  <div className="flex items-center justify-between mb-2">
+                    <div>
+                      <p className="font-medium text-slate-900">{wo.work_order_number}</p>
+                      <p className="text-sm text-slate-600">{wo.notes || 'In Progress'}</p>
+                    </div>
+                    <span className="text-sm font-medium text-slate-900">{progress}%</span>
                   </div>
-                  <span className="text-sm font-medium text-slate-900">{item.progress}%</span>
+                  <div className="w-full bg-slate-200 rounded-full h-2">
+                    <div
+                      className="bg-gradient-to-r from-blue-600 to-blue-700 h-2 rounded-full transition-all duration-500"
+                      style={{ width: `${progress}%` }}
+                    ></div>
+                  </div>
                 </div>
-                <div className="w-full bg-slate-200 rounded-full h-2">
-                  <div
-                    className="bg-gradient-to-r from-blue-600 to-blue-700 h-2 rounded-full transition-all duration-500"
-                    style={{ width: `${item.progress}%` }}
-                  ></div>
-                </div>
-              </div>
-            ))}
-          </div>
+              );
+            })
+          ) : (
+            <div className="text-center py-8 text-slate-500">
+              <p>No active work orders</p>
+              <button
+                onClick={() => window.location.hash = '/production'}
+                className="mt-2 text-sm text-blue-600 hover:text-blue-700"
+              >
+                View production
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>
