@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { supabase } from '../../lib/supabase';
-import { Building2, MapPin, User, CheckCircle } from 'lucide-react';
+import { Building2, MapPin, User, CheckCircle, LogOut, X } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
 interface SetupWizardProps {
@@ -8,11 +8,12 @@ interface SetupWizardProps {
 }
 
 export function SetupWizard({ onComplete }: SetupWizardProps) {
-  const { user } = useAuth();
+  const { user, signOut } = useAuth();
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [companyId, setCompanyId] = useState<string | null>(null);
+  const [showCancelModal, setShowCancelModal] = useState(false);
 
   const [userData, setUserData] = useState({
     fullName: '',
@@ -131,10 +132,30 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
     }
   };
 
+  const handleCancelSetup = async () => {
+    setShowCancelModal(false);
+    setLoading(true);
+    try {
+      await signOut();
+    } catch (err) {
+      console.error('Error signing out:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
       <div className="w-full max-w-2xl">
-        <div className="bg-white rounded-2xl shadow-2xl p-8">
+        <div className="bg-white rounded-2xl shadow-2xl p-8 relative">
+          <button
+            onClick={() => setShowCancelModal(true)}
+            className="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-all"
+            title="Keluar dari setup"
+          >
+            <LogOut className="w-5 h-5" />
+          </button>
+
           <div className="flex items-center justify-center mb-8">
             <div className="w-16 h-16 bg-gradient-to-br from-blue-600 to-blue-700 rounded-xl flex items-center justify-center shadow-lg">
               <Building2 className="w-8 h-8 text-white" />
@@ -400,6 +421,42 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
             </form>
           )}
         </div>
+
+        {showCancelModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-xl font-bold text-slate-900">Batalkan Setup?</h3>
+                <button
+                  onClick={() => setShowCancelModal(false)}
+                  className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-all"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <p className="text-slate-600 mb-6">
+                Apakah Anda yakin ingin keluar dari setup? Data yang sudah dimasukkan {step > 1 ? 'mungkin sudah tersimpan dan ' : ''}akan hilang. Anda perlu login kembali untuk melanjutkan setup.
+              </p>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowCancelModal(false)}
+                  className="flex-1 px-4 py-2 border border-slate-300 text-slate-700 rounded-lg font-medium hover:bg-slate-50 transition-all"
+                >
+                  Batal
+                </button>
+                <button
+                  onClick={handleCancelSetup}
+                  disabled={loading}
+                  className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {loading ? 'Keluar...' : 'Ya, Keluar'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
