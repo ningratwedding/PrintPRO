@@ -21,12 +21,12 @@ export function SignupPage({ onSwitchToLogin }: SignupPageProps) {
     setSuccess(false);
 
     if (password !== confirmPassword) {
-      setError('Passwords do not match');
+      setError('Password tidak cocok');
       return;
     }
 
     if (password.length < 6) {
-      setError('Password must be at least 6 characters');
+      setError('Password minimal 6 karakter');
       return;
     }
 
@@ -50,7 +50,14 @@ export function SignupPage({ onSwitchToLogin }: SignupPageProps) {
               <Printer className="w-8 h-8 text-white" />
             </div>
             <h1 className="text-3xl font-bold text-slate-900">PrintPro</h1>
-            <p className="text-slate-600 mt-2">Create your account</p>
+            <p className="text-slate-600 mt-2">Sistem Manajemen Digital Printing</p>
+          </div>
+
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+            <p className="text-sm text-blue-800">
+              <strong>Mudah dimulai!</strong> Setelah registrasi, Anda akan dipandu untuk setup bisnis Anda.
+              Tidak perlu pengetahuan teknis apapun.
+            </p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-6">
@@ -62,7 +69,7 @@ export function SignupPage({ onSwitchToLogin }: SignupPageProps) {
 
             {success && (
               <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg text-sm">
-                Account created successfully! Setting up your account...
+                Akun berhasil dibuat! Mengatur akun Anda...
               </div>
             )}
 
@@ -76,7 +83,7 @@ export function SignupPage({ onSwitchToLogin }: SignupPageProps) {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                placeholder="your@email.com"
+                placeholder="email@anda.com"
                 required
               />
             </div>
@@ -95,11 +102,12 @@ export function SignupPage({ onSwitchToLogin }: SignupPageProps) {
                 required
                 minLength={6}
               />
+              <p className="mt-1 text-xs text-slate-500">Minimal 6 karakter</p>
             </div>
 
             <div>
               <label htmlFor="confirmPassword" className="block text-sm font-medium text-slate-700 mb-2">
-                Confirm Password
+                Konfirmasi Password
               </label>
               <input
                 id="confirmPassword"
@@ -118,18 +126,18 @@ export function SignupPage({ onSwitchToLogin }: SignupPageProps) {
               disabled={loading || success}
               className="w-full bg-gradient-to-r from-blue-600 to-blue-700 text-white py-3 rounded-lg font-medium hover:from-blue-700 hover:to-blue-800 focus:ring-4 focus:ring-blue-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl"
             >
-              {loading ? 'Creating account...' : 'Sign Up'}
+              {loading ? 'Membuat akun...' : 'Daftar Sekarang'}
             </button>
           </form>
 
           <div className="mt-6 text-center">
             <p className="text-sm text-slate-600">
-              Already have an account?{' '}
+              Sudah punya akun?{' '}
               <button
                 onClick={onSwitchToLogin}
                 className="text-blue-600 hover:text-blue-700 font-medium"
               >
-                Sign in
+                Masuk di sini
               </button>
             </p>
           </div>

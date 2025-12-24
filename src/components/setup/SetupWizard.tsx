@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { supabase } from '../../lib/supabase';
-import { Building2, MapPin, User } from 'lucide-react';
+import { Building2, MapPin, User, CheckCircle } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
 interface SetupWizardProps {
@@ -12,6 +12,11 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [companyId, setCompanyId] = useState<string | null>(null);
+
+  const [userData, setUserData] = useState({
+    fullName: '',
+  });
 
   const [companyData, setCompanyData] = useState({
     name: '',
@@ -27,6 +32,12 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
     address: '',
     phone: '',
   });
+
+  const handleUserSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setStep(2);
+  };
 
   const handleCompanySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -48,9 +59,10 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
 
       if (companyError) throw companyError;
 
-      setStep(2);
+      setCompanyId(company.id);
+      setStep(3);
     } catch (err: any) {
-      setError(err.message || 'Failed to create company');
+      setError(err.message || 'Gagal membuat perusahaan');
     } finally {
       setLoading(false);
     }
@@ -62,18 +74,12 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
     setLoading(true);
 
     try {
-      const { data: companies } = await supabase
-        .from('companies')
-        .select('id')
-        .eq('code', companyData.code)
-        .single();
-
-      if (!companies) throw new Error('Company not found');
+      if (!companyId) throw new Error('Company ID not found');
 
       const { data: branch, error: branchError } = await supabase
         .from('branches')
         .insert({
-          company_id: companies.id,
+          company_id: companyId,
           name: branchData.name,
           code: branchData.code,
           address: branchData.address,
@@ -84,25 +90,42 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
 
       if (branchError) throw branchError;
 
+      if (!user) throw new Error('User not authenticated');
+
+      const { error: userError } = await supabase
+        .from('users')
+        .insert({
+          id: user.id,
+          email: user.email!,
+          full_name: userData.fullName,
+          company_id: companyId,
+          role: 'owner',
+          active: true,
+        });
+
+      if (userError) throw userError;
+
       const { data: ownerRole } = await supabase
         .from('roles')
         .select('id')
         .eq('name', 'Owner')
         .single();
 
-      if (ownerRole && user) {
-        await supabase
-          .from('user_branch_roles')
-          .insert({
-            user_id: user.id,
-            branch_id: branch.id,
-            role_id: ownerRole.id,
-          });
-      }
+      if (!ownerRole) throw new Error('Owner role not found');
+
+      const { error: roleError } = await supabase
+        .from('user_branch_roles')
+        .insert({
+          user_id: user.id,
+          branch_id: branch.id,
+          role_id: ownerRole.id,
+        });
+
+      if (roleError) throw roleError;
 
       onComplete();
     } catch (err: any) {
-      setError(err.message || 'Failed to create branch');
+      setError(err.message || 'Gagal menyelesaikan setup');
     } finally {
       setLoading(false);
     }
@@ -118,19 +141,23 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
             </div>
           </div>
 
-          <h1 className="text-3xl font-bold text-center text-slate-900 mb-2">Setup Your Business</h1>
+          <h1 className="text-3xl font-bold text-center text-slate-900 mb-2">Setup Bisnis Anda</h1>
           <p className="text-center text-slate-600 mb-8">
-            Let's get started by setting up your company and first branch
+            Mari kita mulai dengan mengatur informasi dasar bisnis Anda
           </p>
 
           <div className="flex items-center justify-center mb-8">
             <div className="flex items-center gap-2">
-              <div className={`w-10 h-10 rounded-full flex items-center justify-center ${step >= 1 ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-400'}`}>
-                1
+              <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${step >= 1 ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-400'}`}>
+                {step > 1 ? <CheckCircle className="w-5 h-5" /> : '1'}
               </div>
-              <div className={`w-24 h-1 ${step >= 2 ? 'bg-blue-600' : 'bg-slate-200'}`}></div>
-              <div className={`w-10 h-10 rounded-full flex items-center justify-center ${step >= 2 ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-400'}`}>
-                2
+              <div className={`w-20 h-1 transition-all ${step >= 2 ? 'bg-blue-600' : 'bg-slate-200'}`}></div>
+              <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${step >= 2 ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-400'}`}>
+                {step > 2 ? <CheckCircle className="w-5 h-5" /> : '2'}
+              </div>
+              <div className={`w-20 h-1 transition-all ${step >= 3 ? 'bg-blue-600' : 'bg-slate-200'}`}></div>
+              <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${step >= 3 ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-400'}`}>
+                3
               </div>
             </div>
           </div>
@@ -142,50 +169,93 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
           )}
 
           {step === 1 && (
+            <form onSubmit={handleUserSubmit} className="space-y-6">
+              <div className="text-center mb-6">
+                <div className="inline-flex items-center justify-center w-12 h-12 bg-blue-100 rounded-lg mb-3">
+                  <User className="w-6 h-6 text-blue-600" />
+                </div>
+                <h2 className="text-xl font-bold text-slate-900">Informasi Anda</h2>
+                <p className="text-sm text-slate-600">Masukkan nama lengkap Anda</p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">
+                  Nama Lengkap
+                </label>
+                <input
+                  type="text"
+                  value={userData.fullName}
+                  onChange={(e) => setUserData({ ...userData, fullName: e.target.value })}
+                  className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="Contoh: Budi Santoso"
+                  required
+                />
+              </div>
+
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <p className="text-sm text-blue-800">
+                  <strong>Email Anda:</strong> {user?.email}
+                </p>
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full bg-gradient-to-r from-blue-600 to-blue-700 text-white py-3 rounded-lg font-medium hover:from-blue-700 hover:to-blue-800 focus:ring-4 focus:ring-blue-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
+              >
+                Lanjutkan
+              </button>
+            </form>
+          )}
+
+          {step === 2 && (
             <form onSubmit={handleCompanySubmit} className="space-y-6">
               <div className="text-center mb-6">
                 <div className="inline-flex items-center justify-center w-12 h-12 bg-blue-100 rounded-lg mb-3">
                   <Building2 className="w-6 h-6 text-blue-600" />
                 </div>
-                <h2 className="text-xl font-bold text-slate-900">Company Information</h2>
-                <p className="text-sm text-slate-600">Enter your company details</p>
+                <h2 className="text-xl font-bold text-slate-900">Informasi Perusahaan</h2>
+                <p className="text-sm text-slate-600">Masukkan detail perusahaan Anda</p>
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-2">
-                  Company Name
+                  Nama Perusahaan
                 </label>
                 <input
                   type="text"
                   value={companyData.name}
                   onChange={(e) => setCompanyData({ ...companyData, name: e.target.value })}
                   className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="Contoh: PT Digital Printing Indonesia"
                   required
                 />
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-2">
-                  Company Code
+                  Kode Perusahaan
                 </label>
                 <input
                   type="text"
                   value={companyData.code}
                   onChange={(e) => setCompanyData({ ...companyData, code: e.target.value.toUpperCase() })}
                   className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="e.g., ABC123"
+                  placeholder="Contoh: DPI"
                   required
                 />
+                <p className="mt-1 text-xs text-slate-500">Kode unik untuk identifikasi perusahaan</p>
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-2">
-                  Address
+                  Alamat
                 </label>
                 <textarea
                   value={companyData.address}
                   onChange={(e) => setCompanyData({ ...companyData, address: e.target.value })}
                   className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="Alamat lengkap perusahaan"
                   rows={3}
                 />
               </div>
@@ -193,13 +263,14 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-2">
-                    Phone
+                    Telepon
                   </label>
                   <input
                     type="tel"
                     value={companyData.phone}
                     onChange={(e) => setCompanyData({ ...companyData, phone: e.target.value })}
                     className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="Contoh: 021-12345678"
                   />
                 </div>
                 <div>
@@ -211,80 +282,9 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
                     value={companyData.email}
                     onChange={(e) => setCompanyData({ ...companyData, email: e.target.value })}
                     className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="Contoh: info@perusahaan.com"
                   />
                 </div>
-              </div>
-
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full bg-gradient-to-r from-blue-600 to-blue-700 text-white py-3 rounded-lg font-medium hover:from-blue-700 hover:to-blue-800 focus:ring-4 focus:ring-blue-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
-              >
-                {loading ? 'Creating...' : 'Continue'}
-              </button>
-            </form>
-          )}
-
-          {step === 2 && (
-            <form onSubmit={handleBranchSubmit} className="space-y-6">
-              <div className="text-center mb-6">
-                <div className="inline-flex items-center justify-center w-12 h-12 bg-green-100 rounded-lg mb-3">
-                  <MapPin className="w-6 h-6 text-green-600" />
-                </div>
-                <h2 className="text-xl font-bold text-slate-900">First Branch</h2>
-                <p className="text-sm text-slate-600">Create your first branch location</p>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">
-                  Branch Name
-                </label>
-                <input
-                  type="text"
-                  value={branchData.name}
-                  onChange={(e) => setBranchData({ ...branchData, name: e.target.value })}
-                  className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="e.g., Main Office"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">
-                  Branch Code
-                </label>
-                <input
-                  type="text"
-                  value={branchData.code}
-                  onChange={(e) => setBranchData({ ...branchData, code: e.target.value.toUpperCase() })}
-                  className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="e.g., HQ"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">
-                  Address
-                </label>
-                <textarea
-                  value={branchData.address}
-                  onChange={(e) => setBranchData({ ...branchData, address: e.target.value })}
-                  className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  rows={3}
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">
-                  Phone
-                </label>
-                <input
-                  type="tel"
-                  value={branchData.phone}
-                  onChange={(e) => setBranchData({ ...branchData, phone: e.target.value })}
-                  className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
               </div>
 
               <div className="flex gap-4">
@@ -293,14 +293,108 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
                   onClick={() => setStep(1)}
                   className="flex-1 px-6 py-3 border border-slate-300 text-slate-700 rounded-lg font-medium hover:bg-slate-50 transition-all"
                 >
-                  Back
+                  Kembali
+                </button>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="flex-1 bg-gradient-to-r from-blue-600 to-blue-700 text-white py-3 rounded-lg font-medium hover:from-blue-700 hover:to-blue-800 focus:ring-4 focus:ring-blue-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
+                >
+                  {loading ? 'Membuat...' : 'Lanjutkan'}
+                </button>
+              </div>
+            </form>
+          )}
+
+          {step === 3 && (
+            <form onSubmit={handleBranchSubmit} className="space-y-6">
+              <div className="text-center mb-6">
+                <div className="inline-flex items-center justify-center w-12 h-12 bg-green-100 rounded-lg mb-3">
+                  <MapPin className="w-6 h-6 text-green-600" />
+                </div>
+                <h2 className="text-xl font-bold text-slate-900">Cabang Pertama</h2>
+                <p className="text-sm text-slate-600">Buat lokasi cabang pertama Anda</p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">
+                  Nama Cabang
+                </label>
+                <input
+                  type="text"
+                  value={branchData.name}
+                  onChange={(e) => setBranchData({ ...branchData, name: e.target.value })}
+                  className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="Contoh: Kantor Pusat"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">
+                  Kode Cabang
+                </label>
+                <input
+                  type="text"
+                  value={branchData.code}
+                  onChange={(e) => setBranchData({ ...branchData, code: e.target.value.toUpperCase() })}
+                  className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="Contoh: HQ"
+                  required
+                />
+                <p className="mt-1 text-xs text-slate-500">Kode unik untuk identifikasi cabang</p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">
+                  Alamat
+                </label>
+                <textarea
+                  value={branchData.address}
+                  onChange={(e) => setBranchData({ ...branchData, address: e.target.value })}
+                  className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="Alamat lengkap cabang"
+                  rows={3}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">
+                  Telepon
+                </label>
+                <input
+                  type="tel"
+                  value={branchData.phone}
+                  onChange={(e) => setBranchData({ ...branchData, phone: e.target.value })}
+                  className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="Contoh: 021-87654321"
+                />
+              </div>
+
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+                <div className="flex items-start gap-3">
+                  <CheckCircle className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
+                  <div className="text-sm text-blue-800">
+                    <p className="font-medium mb-1">Siap untuk menyelesaikan setup!</p>
+                    <p>Setelah langkah ini, Anda akan dapat mengakses dashboard dan mulai menggunakan sistem.</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex gap-4">
+                <button
+                  type="button"
+                  onClick={() => setStep(2)}
+                  className="flex-1 px-6 py-3 border border-slate-300 text-slate-700 rounded-lg font-medium hover:bg-slate-50 transition-all"
+                >
+                  Kembali
                 </button>
                 <button
                   type="submit"
                   disabled={loading}
                   className="flex-1 bg-gradient-to-r from-green-600 to-green-700 text-white py-3 rounded-lg font-medium hover:from-green-700 hover:to-green-800 focus:ring-4 focus:ring-green-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
                 >
-                  {loading ? 'Creating...' : 'Complete Setup'}
+                  {loading ? 'Menyelesaikan...' : 'Selesaikan Setup'}
                 </button>
               </div>
             </form>

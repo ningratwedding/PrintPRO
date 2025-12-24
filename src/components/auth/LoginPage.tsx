@@ -36,7 +36,7 @@ export function LoginPage({ onSwitchToSignup }: LoginPageProps) {
               <Printer className="w-8 h-8 text-white" />
             </div>
             <h1 className="text-3xl font-bold text-slate-900">PrintPro</h1>
-            <p className="text-slate-600 mt-2">Digital Printing Management</p>
+            <p className="text-slate-600 mt-2">Sistem Manajemen Digital Printing</p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-6">
@@ -56,7 +56,7 @@ export function LoginPage({ onSwitchToSignup }: LoginPageProps) {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                placeholder="your@email.com"
+                placeholder="email@anda.com"
                 required
               />
             </div>
@@ -81,18 +81,18 @@ export function LoginPage({ onSwitchToSignup }: LoginPageProps) {
               disabled={loading}
               className="w-full bg-gradient-to-r from-blue-600 to-blue-700 text-white py-3 rounded-lg font-medium hover:from-blue-700 hover:to-blue-800 focus:ring-4 focus:ring-blue-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl"
             >
-              {loading ? 'Signing in...' : 'Sign In'}
+              {loading ? 'Masuk...' : 'Masuk'}
             </button>
           </form>
 
           <div className="mt-6 text-center">
             <p className="text-sm text-slate-600">
-              Don't have an account?{' '}
+              Belum punya akun?{' '}
               <button
                 onClick={onSwitchToSignup}
                 className="text-blue-600 hover:text-blue-700 font-medium"
               >
-                Sign up
+                Daftar di sini
               </button>
             </p>
           </div>
