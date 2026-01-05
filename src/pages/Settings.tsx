@@ -150,12 +150,21 @@ export function Settings() {
       if (branchError) throw branchError;
 
       if (newBranch) {
+        const { data: adminRole, error: roleQueryError } = await supabase
+          .from('roles')
+          .select('id')
+          .eq('name', 'Admin')
+          .maybeSingle();
+
+        if (roleQueryError) throw roleQueryError;
+        if (!adminRole) throw new Error('Admin role not found');
+
         const { error: roleError } = await supabase
           .from('user_branch_roles')
           .insert({
             user_id: user.id,
             branch_id: newBranch.id,
-            role_id: (await supabase.from('roles').select('id').eq('name', 'admin').single()).data?.id
+            role_id: adminRole.id
           });
 
         if (roleError) throw roleError;
@@ -165,9 +174,10 @@ export function Settings() {
       setShowAddBranchModal(false);
       setNewBranchData({ name: '', code: '', address: '', phone: '', timezone: 'Asia/Jakarta' });
       loadBranches();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error creating branch:', error);
-      alert('Failed to create branch');
+      const errorMessage = error?.message || 'Failed to create branch';
+      alert(`Error: ${errorMessage}`);
     } finally {
       setSaving(false);
     }
