@@ -118,21 +118,29 @@ export function Layout({ children }: LayoutProps) {
                 const userRoleName = currentRole?.name?.toLowerCase() || '';
                 return item.roles.includes(userRoleName);
               })
-              .map((item) => (
-                <a
-                  key={item.path}
-                  href={item.path}
-                  className="flex items-center gap-3 px-4 py-3 text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg transition-all group"
-                >
-                  <item.icon className="w-5 h-5 group-hover:scale-110 transition-transform" />
-                  <span className="font-medium">{item.label}</span>
-                  {item.badge && (
-                    <span className="ml-auto bg-red-500 text-white text-xs px-2 py-1 rounded-full">
-                      {item.badge}
-                    </span>
-                  )}
-                </a>
-              ))}
+              .map((item) => {
+                const isActive = window.location.hash === `#${item.path}` || (window.location.hash === '' && item.path === '/dashboard');
+                return (
+                  <a
+                    key={item.path}
+                    href={`#${item.path}`}
+                    className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all group ${
+                      isActive
+                        ? 'bg-blue-600 text-white'
+                        : 'text-slate-300 hover:text-white hover:bg-slate-800'
+                    }`}
+                    onClick={() => setSidebarOpen(false)}
+                  >
+                    <item.icon className="w-5 h-5 group-hover:scale-110 transition-transform" />
+                    <span className="font-medium">{item.label}</span>
+                    {item.badge && (
+                      <span className="ml-auto bg-red-500 text-white text-xs px-2 py-1 rounded-full">
+                        {item.badge}
+                      </span>
+                    )}
+                  </a>
+                );
+              })}
           </nav>
 
           <div className="p-4 border-t border-slate-700">
