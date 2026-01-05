@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { ProductTemplate } from '../types/database';
-import { Plus, Search, Edit2, Trash2, Package, ClipboardList } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, Package, ClipboardList, Upload, X } from 'lucide-react';
 import { BOMModal } from '../components/products/BOMModal';
 
 export function Products() {
@@ -15,12 +15,16 @@ export function Products() {
   const [showBOMModal, setShowBOMModal] = useState(false);
   const [editingProduct, setEditingProduct] = useState<ProductTemplate | null>(null);
   const [bomProduct, setBomProduct] = useState<ProductTemplate | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     name: '',
     code: '',
     category: 'banner',
     description: '',
-    base_unit: 'pcs'
+    base_unit: 'pcs',
+    image_url: ''
   });
 
   useEffect(() => {
@@ -57,10 +61,63 @@ export function Products() {
     }
   };
 
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        alert('File size must be less than 5MB');
+        return;
+      }
+      if (!file.type.startsWith('image/')) {
+        alert('Please select an image file');
+        return;
+      }
+      setImageFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImagePreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const uploadImage = async (file: File, productCode: string): Promise<string | null> => {
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${productCode}-${Date.now()}.${fileExt}`;
+      const filePath = `${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('product-images')
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: true
+        });
+
+      if (uploadError) throw uploadError;
+
+      const { data } = supabase.storage
+        .from('product-images')
+        .getPublicUrl(filePath);
+
+      return data.publicUrl;
+    } catch (error) {
+      console.error('Error uploading image:', error);
+      alert('Failed to upload image');
+      return null;
+    }
+  };
+
+  const clearImageSelection = () => {
+    setImageFile(null);
+    setImagePreview(null);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentBranch) return;
 
+    setUploading(true);
     try {
       const { data: branch } = await supabase
         .from('branches')
@@ -70,20 +127,33 @@ export function Products() {
 
       if (!branch) return;
 
+      let imageUrl = formData.image_url;
+      if (imageFile) {
+        const uploadedUrl = await uploadImage(imageFile, formData.code);
+        if (uploadedUrl) {
+          imageUrl = uploadedUrl;
+        }
+      }
+
       const { error } = await supabase
         .from('product_templates')
         .insert({
           company_id: branch.company_id,
-          ...formData
+          ...formData,
+          image_url: imageUrl
         });
 
       if (error) throw error;
 
       setShowAddModal(false);
-      setFormData({ name: '', code: '', category: 'banner', description: '', base_unit: 'pcs' });
+      setFormData({ name: '', code: '', category: 'banner', description: '', base_unit: 'pcs', image_url: '' });
+      clearImageSelection();
       loadProducts();
     } catch (error) {
       console.error('Error creating product:', error);
+      alert('Failed to create product');
+    } finally {
+      setUploading(false);
     }
   };
 
@@ -94,8 +164,12 @@ export function Products() {
       code: product.code,
       category: product.category,
       description: product.description || '',
-      base_unit: product.base_unit
+      base_unit: product.base_unit,
+      image_url: product.image_url || ''
     });
+    if (product.image_url) {
+      setImagePreview(product.image_url);
+    }
     setShowEditModal(true);
   };
 
@@ -103,20 +177,36 @@ export function Products() {
     e.preventDefault();
     if (!editingProduct) return;
 
+    setUploading(true);
     try {
+      let imageUrl = formData.image_url;
+      if (imageFile) {
+        const uploadedUrl = await uploadImage(imageFile, formData.code);
+        if (uploadedUrl) {
+          imageUrl = uploadedUrl;
+        }
+      }
+
       const { error } = await supabase
         .from('product_templates')
-        .update(formData)
+        .update({
+          ...formData,
+          image_url: imageUrl
+        })
         .eq('id', editingProduct.id);
 
       if (error) throw error;
 
       setShowEditModal(false);
       setEditingProduct(null);
-      setFormData({ name: '', code: '', category: 'banner', description: '', base_unit: 'pcs' });
+      setFormData({ name: '', code: '', category: 'banner', description: '', base_unit: 'pcs', image_url: '' });
+      clearImageSelection();
       loadProducts();
     } catch (error) {
       console.error('Error updating product:', error);
+      alert('Failed to update product');
+    } finally {
+      setUploading(false);
     }
   };
 
@@ -207,9 +297,17 @@ export function Products() {
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-gradient-to-br from-blue-100 to-blue-200 rounded-lg flex items-center justify-center">
-                        <Package className="w-5 h-5 text-blue-600" />
-                      </div>
+                      {product.image_url ? (
+                        <img
+                          src={product.image_url}
+                          alt={product.name}
+                          className="w-12 h-12 rounded-lg object-cover border border-slate-200"
+                        />
+                      ) : (
+                        <div className="w-12 h-12 bg-gradient-to-br from-blue-100 to-blue-200 rounded-lg flex items-center justify-center">
+                          <Package className="w-6 h-6 text-blue-600" />
+                        </div>
+                      )}
                       <div>
                         <p className="font-medium text-slate-900">{product.name}</p>
                         {product.description && (
@@ -274,6 +372,41 @@ export function Products() {
             </div>
             <form onSubmit={handleSubmit} className="p-6 space-y-4">
               <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Product Image</label>
+                <div className="space-y-3">
+                  {imagePreview ? (
+                    <div className="relative inline-block">
+                      <img
+                        src={imagePreview}
+                        alt="Preview"
+                        className="w-32 h-32 rounded-lg object-cover border-2 border-slate-200"
+                      />
+                      <button
+                        type="button"
+                        onClick={clearImageSelection}
+                        className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center hover:bg-red-600 transition-colors"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-slate-300 rounded-lg cursor-pointer hover:border-blue-500 hover:bg-blue-50 transition-colors">
+                      <div className="flex flex-col items-center justify-center">
+                        <Upload className="w-8 h-8 text-slate-400 mb-2" />
+                        <p className="text-sm text-slate-600">Click to upload image</p>
+                        <p className="text-xs text-slate-400 mt-1">PNG, JPG up to 5MB</p>
+                      </div>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleImageChange}
+                        className="hidden"
+                      />
+                    </label>
+                  )}
+                </div>
+              </div>
+              <div>
                 <label className="block text-sm font-medium text-slate-700 mb-2">Product Name</label>
                 <input
                   type="text"
@@ -327,16 +460,21 @@ export function Products() {
               <div className="flex gap-3 pt-4">
                 <button
                   type="button"
-                  onClick={() => setShowAddModal(false)}
+                  onClick={() => {
+                    setShowAddModal(false);
+                    clearImageSelection();
+                  }}
                   className="flex-1 px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors"
+                  disabled={uploading}
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all"
+                  disabled={uploading}
+                  className="flex-1 px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Add Product
+                  {uploading ? 'Creating...' : 'Add Product'}
                 </button>
               </div>
             </form>
@@ -351,6 +489,41 @@ export function Products() {
               <h2 className="text-xl font-bold text-slate-900">Edit Product</h2>
             </div>
             <form onSubmit={handleUpdate} className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Product Image</label>
+                <div className="space-y-3">
+                  {imagePreview ? (
+                    <div className="relative inline-block">
+                      <img
+                        src={imagePreview}
+                        alt="Preview"
+                        className="w-32 h-32 rounded-lg object-cover border-2 border-slate-200"
+                      />
+                      <button
+                        type="button"
+                        onClick={clearImageSelection}
+                        className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center hover:bg-red-600 transition-colors"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-slate-300 rounded-lg cursor-pointer hover:border-blue-500 hover:bg-blue-50 transition-colors">
+                      <div className="flex flex-col items-center justify-center">
+                        <Upload className="w-8 h-8 text-slate-400 mb-2" />
+                        <p className="text-sm text-slate-600">Click to upload image</p>
+                        <p className="text-xs text-slate-400 mt-1">PNG, JPG up to 5MB</p>
+                      </div>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleImageChange}
+                        className="hidden"
+                      />
+                    </label>
+                  )}
+                </div>
+              </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-2">Product Name</label>
                 <input
@@ -410,17 +583,20 @@ export function Products() {
                   onClick={() => {
                     setShowEditModal(false);
                     setEditingProduct(null);
-                    setFormData({ name: '', code: '', category: 'banner', description: '', base_unit: 'pcs' });
+                    setFormData({ name: '', code: '', category: 'banner', description: '', base_unit: 'pcs', image_url: '' });
+                    clearImageSelection();
                   }}
                   className="flex-1 px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors"
+                  disabled={uploading}
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all"
+                  disabled={uploading}
+                  className="flex-1 px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Update Product
+                  {uploading ? 'Updating...' : 'Update Product'}
                 </button>
               </div>
             </form>

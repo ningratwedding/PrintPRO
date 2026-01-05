@@ -50,6 +50,7 @@ export interface ProductTemplate {
   category: string;
   description?: string;
   base_unit: string;
+  image_url?: string;
   active: boolean;
   created_at: string;
   updated_at: string;
