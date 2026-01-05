@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { ProductTemplate } from '../types/database';
-import { Plus, Search, Edit2, Trash2, Package } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, Package, ClipboardList } from 'lucide-react';
+import { BOMModal } from '../components/products/BOMModal';
 
 export function Products() {
   const { currentBranch } = useAuth();
@@ -11,7 +12,9 @@ export function Products() {
   const [searchTerm, setSearchTerm] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showBOMModal, setShowBOMModal] = useState(false);
   const [editingProduct, setEditingProduct] = useState<ProductTemplate | null>(null);
+  const [bomProduct, setBomProduct] = useState<ProductTemplate | null>(null);
   const [formData, setFormData] = useState({
     name: '',
     code: '',
@@ -226,6 +229,16 @@ export function Products() {
                   <td className="px-6 py-4 whitespace-nowrap text-right">
                     <div className="flex items-center justify-end gap-2">
                       <button
+                        onClick={() => {
+                          setBomProduct(product);
+                          setShowBOMModal(true);
+                        }}
+                        className="p-2 text-slate-600 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
+                        title="Bill of Materials"
+                      >
+                        <ClipboardList className="w-4 h-4" />
+                      </button>
+                      <button
                         onClick={() => handleEdit(product)}
                         className="p-2 text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                       >
@@ -413,6 +426,20 @@ export function Products() {
             </form>
           </div>
         </div>
+      )}
+
+      {showBOMModal && bomProduct && (
+        <BOMModal
+          productTemplateId={bomProduct.id}
+          productName={bomProduct.name}
+          onClose={() => {
+            setShowBOMModal(false);
+            setBomProduct(null);
+          }}
+          onSuccess={() => {
+            loadProducts();
+          }}
+        />
       )}
     </div>
   );

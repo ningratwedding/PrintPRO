@@ -13,6 +13,8 @@ import { POS } from './pages/POS';
 import { Reports } from './pages/Reports';
 import { Users } from './pages/Users';
 import { Pricing } from './pages/Pricing';
+import { Deliveries } from './pages/Deliveries';
+import { Settings } from './pages/Settings';
 
 function AppContent() {
   const { user, loading, userBranches } = useAuth();
@@ -74,18 +76,9 @@ function AppContent() {
       case '/pricing':
         return <Pricing />;
       case '/deliveries':
+        return <Deliveries />;
       case '/settings':
-        return (
-          <div className="flex items-center justify-center h-96">
-            <div className="text-center">
-              <div className="w-16 h-16 bg-slate-200 rounded-full flex items-center justify-center mx-auto mb-4">
-                <span className="text-3xl">🚧</span>
-              </div>
-              <h2 className="text-2xl font-bold text-slate-900 mb-2">Coming Soon</h2>
-              <p className="text-slate-600">This module is under construction</p>
-            </div>
-          </div>
-        );
+        return <Settings />;
       default:
         return <Dashboard />;
     }
