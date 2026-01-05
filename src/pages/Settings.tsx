@@ -1,19 +1,21 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
-import { Save, Building2, DollarSign, Percent, Printer, MapPin, Phone, Mail, Plus, Store } from 'lucide-react';
+import { Save, Building2, DollarSign, Percent, Printer, MapPin, Phone, Mail, Plus, Store, CheckCircle2 } from 'lucide-react';
 
 interface Branch {
   id: string;
   name: string;
+  code: string;
   address: string | null;
   phone: string | null;
   timezone: string | null;
   active: boolean;
+  created_at: string;
 }
 
 export function Settings() {
-  const { currentBranch, user } = useAuth();
+  const { currentBranch, user, setCurrentBranch } = useAuth();
   const [activeTab, setActiveTab] = useState('branches');
   const [saving, setSaving] = useState(false);
   const [branches, setBranches] = useState<Branch[]>([]);
@@ -35,6 +37,7 @@ export function Settings() {
   });
   const [newBranchData, setNewBranchData] = useState({
     name: '',
+    code: '',
     address: '',
     phone: '',
     timezone: 'Asia/Jakarta'
@@ -128,11 +131,14 @@ export function Settings() {
 
       if (!currentBranchData) return;
 
+      const branchCode = newBranchData.code || `BR${Date.now().toString().slice(-6)}`;
+
       const { data: newBranch, error: branchError } = await supabase
         .from('branches')
         .insert({
           company_id: currentBranchData.company_id,
           name: newBranchData.name,
+          code: branchCode,
           address: newBranchData.address,
           phone: newBranchData.phone,
           timezone: newBranchData.timezone,
@@ -157,7 +163,7 @@ export function Settings() {
 
       alert('Branch created successfully!');
       setShowAddBranchModal(false);
-      setNewBranchData({ name: '', address: '', phone: '', timezone: 'Asia/Jakarta' });
+      setNewBranchData({ name: '', code: '', address: '', phone: '', timezone: 'Asia/Jakarta' });
       loadBranches();
     } catch (error) {
       console.error('Error creating branch:', error);
@@ -307,6 +313,7 @@ export function Settings() {
                         </div>
                         <div>
                           <h3 className="font-bold text-slate-900">{branch.name}</h3>
+                          <p className="text-xs text-slate-500 mt-0.5">Code: {branch.code}</p>
                           {branch.id === currentBranch?.id && (
                             <span className="text-xs font-medium text-blue-600">Current Branch</span>
                           )}
@@ -332,9 +339,20 @@ export function Settings() {
                         <p>{branch.phone}</p>
                       </div>
                     )}
-                    <div className="flex items-center gap-2 text-sm text-slate-500 mt-3">
+                    <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500 mt-3 pt-3 border-t border-slate-200">
                       <span>Timezone: {branch.timezone || 'Asia/Jakarta'}</span>
+                      <span>•</span>
+                      <span>Created: {new Date(branch.created_at).toLocaleDateString('id-ID')}</span>
                     </div>
+                    {branch.id !== currentBranch?.id && (
+                      <button
+                        onClick={() => setCurrentBranch(branch.id)}
+                        className="mt-3 w-full flex items-center justify-center gap-2 px-4 py-2 bg-slate-100 hover:bg-blue-600 text-slate-700 hover:text-white rounded-lg transition-all font-medium text-sm"
+                      >
+                        <CheckCircle2 className="w-4 h-4" />
+                        Switch to this branch
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>
@@ -606,7 +624,7 @@ export function Settings() {
             </div>
             <form onSubmit={handleCreateBranch} className="p-6 space-y-4">
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Branch Name</label>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Branch Name *</label>
                 <input
                   type="text"
                   value={newBranchData.name}
@@ -615,6 +633,17 @@ export function Settings() {
                   required
                   placeholder="e.g., Cabang Jakarta Pusat"
                 />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Branch Code</label>
+                <input
+                  type="text"
+                  value={newBranchData.code}
+                  onChange={(e) => setNewBranchData({ ...newBranchData, code: e.target.value.toUpperCase() })}
+                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="e.g., JKT01 (auto-generated if empty)"
+                />
+                <p className="text-xs text-slate-500 mt-1">Unique code for the branch. Leave empty to auto-generate.</p>
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-2 flex items-center gap-2">
@@ -659,7 +688,7 @@ export function Settings() {
                   type="button"
                   onClick={() => {
                     setShowAddBranchModal(false);
-                    setNewBranchData({ name: '', address: '', phone: '', timezone: 'Asia/Jakarta' });
+                    setNewBranchData({ name: '', code: '', address: '', phone: '', timezone: 'Asia/Jakarta' });
                   }}
                   className="flex-1 px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors"
                 >
